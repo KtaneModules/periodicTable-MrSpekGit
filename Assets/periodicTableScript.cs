@@ -326,6 +326,7 @@
 		{
 			if (!(final > buttons.Length) && !(final == 0)) 
 			{
+				yield return null;
 				int finalII = final - 1;
 				buttons [finalII].OnInteract ();
 				yield return new WaitForSeconds(.1f);
