@@ -1,25 +1,26 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using Newtonsoft.Json;
-using KMHelper;
+﻿	using System;
+	using System.Collections;
+	using System.Collections.Generic;
+	using System.Text.RegularExpressions;
+	using System.Linq;
+	using UnityEngine;
+	using Newtonsoft.Json;
+	using KMHelper;
 
-public class ElementsOption
-{
+	public class ElementsOption
+	{
 	public String ele;
 	public String sym;
 	public Int32 num;
-}
+	}
 
-public class ElementsOptions
-{
+	public class ElementsOptions
+	{
 	public List<ElementsOption> options;
-}
+	}
 
-public class periodicTableScript : MonoBehaviour 
-{
+	public class periodicTableScript : MonoBehaviour 
+	{
 	public TextAsset elementsJson;
 	public KMBombInfo Bomb;
 	public KMAudio Audio;
@@ -30,8 +31,8 @@ public class periodicTableScript : MonoBehaviour
 	public KMSelectable[] buttons;
 
 
-	ElementsOptions eleOptions, symOptions, numOptions, butOptions, pressOptions, answerOptions;
-	ElementsOption eleOption, symOption, numOption, butOption, pressOption, answerOption;
+	ElementsOptions eleOptions, symOptions, numOptions, butOptions, pressOptions, answerOptions, twitchOptions;
+	ElementsOption eleOption, symOption, numOption, butOption, pressOption, answerOption, twitchOption;
 
 	//logging
 	static int moduleIdCounter = 1;
@@ -62,40 +63,10 @@ public class periodicTableScript : MonoBehaviour
 	{
 		moduleId = moduleIdCounter++;
 
-		for (int i = 0; i < buttons.Length; i++)
-		{
+		for (int i = 0; i < buttons.Length; i++) {
 			int j = i;
-			int k = j + 1;
-			buttons[j].OnInteract += delegate
-			{ 
-				buttons[j].AddInteractionPunch();
-				pressOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
-				pressOption = pressOptions.options[j];
-				Debug.LogFormat ("[Periodic Table #{0}] You pressed {1} / {2} / {3}", moduleId, pressOption.ele, pressOption.sym, pressOption.num);
-
-				if (isSolved)
-				{
-					return false;
-				}
-
-				else if (k.Equals(solutionButtonMod)){
-					answerOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
-					answerOption = answerOptions.options[solutionButtonModII];
-					Debug.LogFormat ("[Periodic Table #{0}] Expecting {1} / {2} / {3}", moduleId, answerOption.ele, answerOption.sym, answerOption.num);
-					Debug.LogFormat ("[Periodic Table #{0}] You solved the module :D", moduleId);
-					Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.CorrectChime, transform);
-					isSolved = true;
-					GetComponent<KMBombModule>().HandlePass();
-				}
-
-				else {
-					answerOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
-					answerOption = answerOptions.options[solutionButtonModII];
-					Debug.LogFormat ("[Periodic Table #{0}] Expecting {1} / {2} / {3}", moduleId, answerOption.ele, answerOption.sym, answerOption.num);
-					Debug.LogFormat ("[Periodic Table #{0}] That was wrong :(", moduleId);
-					GetComponent<KMBombModule>().HandleStrike();
-				}
-
+			buttons [j].OnInteract += delegate () {
+				buttonInteract (j);
 				return false;
 			};
 		}
@@ -237,6 +208,8 @@ public class periodicTableScript : MonoBehaviour
 
 	void CalculateAnswers()
 	{
+
+		Debug.LogFormat ("[Periodic Table #{0}] ---------------- ", moduleId);
 		//Element# + Batteries
 		int batCount = Bomb.GetBatteryCount();
 		randomElementColour = randomElementColour + 1;
@@ -294,6 +267,79 @@ public class periodicTableScript : MonoBehaviour
 		else {
 			solutionButtonMod = solutionButton;
 			solutionButtonModII = solutionButton - 1;
+		}
+	}
+
+	void buttonInteract(int i)
+	{
+		{ 
+			buttons[i].AddInteractionPunch();
+			pressOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
+			pressOption = pressOptions.options[i];
+			Debug.LogFormat ("[Periodic Table #{0}] ---------------- ", moduleId);
+			Debug.LogFormat ("[Periodic Table #{0}] You pressed {1} / {2} / {3}", moduleId, pressOption.ele, pressOption.sym, pressOption.num);
+
+			if (isSolved)
+			{
+				return;
+			}
+
+			else if (i.Equals(solutionButtonModII)){
+				answerOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
+				answerOption = answerOptions.options[solutionButtonModII];
+				Debug.LogFormat ("[Periodic Table #{0}] Expecting {1} / {2} / {3}", moduleId, answerOption.ele, answerOption.sym, answerOption.num);
+				Debug.LogFormat ("[Periodic Table #{0}] You solved the module :D", moduleId);
+				Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.CorrectChime, transform);
+				isSolved = true;
+				GetComponent<KMBombModule>().HandlePass();
+			}
+
+			else {
+				answerOptions = JsonConvert.DeserializeObject<ElementsOptions>(elementsJson.text);
+				answerOption = answerOptions.options[solutionButtonModII];
+				Debug.LogFormat ("[Periodic Table #{0}] Expecting {1} / {2} / {3}", moduleId, answerOption.ele, answerOption.sym, answerOption.num);
+				Debug.LogFormat ("[Periodic Table #{0}] That was wrong :(", moduleId);
+				GetComponent<KMBombModule>().HandleStrike();
+			}
+
+			return;
+		}
+	}
+
+	#pragma warning disable 414
+	private string TwitchHelpMessage = @"Submit the atomic number as an answer with “!{0} submit 109” or “!{0} press 109”. This ssubmits atomic number 109 (Must be digits!).";
+	#pragma warning restore 414
+
+	private IEnumerator ProcessTwitchCommand(string inputCommand)
+	{
+		var commands = inputCommand.ToLowerInvariant().Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+		int final;
+
+		if (commands.Length != 2 || (commands [0] != "submit" && commands [0] != "press")) 
+		{
+			yield break;
+		}
+
+		string result = commands [1];
+
+		if (Int32.TryParse(result, out final)) 
+		{
+			if (!(final > buttons.Length) && !(final == 0)) 
+			{
+				int finalII = final - 1;
+				buttons [finalII].OnInteract ();
+				yield return new WaitForSeconds(.1f);
+			} 
+
+			else 
+			{
+				yield break;
+			}
+		}
+
+		else 
+		{
+			yield break;
 		}
 	}
 }
